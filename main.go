@@ -7,6 +7,9 @@ import (
 	"syscall"
 )
 
+// 容器进程的文件系统路径
+const childFsPath = "/home/faust/develop/funny/rookie-docker/ubuntu-fs"
+
 func main() {
 	switch os.Args[1] {
 	case "run":
@@ -37,13 +40,12 @@ func parent() {
 
 	// 默认情况下，容器内的所有信息都会被共享给主机，如果我们不希望某些信息被共享
 	// 可以在Unshareflags中添加对应的flag
+
+	// 这里需要注意，如果隐藏了用户，那么fork出来的子进程会使用nobody用户运行，没有权限进行chroot等操作
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags: syscall.CLONE_NEWUTS |
 			syscall.CLONE_NEWPID |
-			syscall.CLONE_NEWNS |
-			syscall.CLONE_NEWUSER |
-			syscall.CLONE_NEWNET |
-			syscall.CLONE_NEWNET,
+			syscall.CLONE_NEWNS,
 		Unshareflags: syscall.CLONE_NEWNS,
 	}
 	cmd.Stdin = os.Stdin
@@ -60,7 +62,6 @@ func parent() {
 func child() {
 	// 在默认情况下，线程会继承来自主机的挂载信息，因此这里我们需要做出修改
 
-	// TODO: 一个失败的文件系统隔离方案，具体bug原因有待研究
 	// // 一个trick，因为PivotRoot要求交换的两个文件系统不属于同一棵文件树，
 	// // 因此使用Mount来解决这个问题（不懂）
 	// must(syscall.Mount("rootfs", "rootfs", "", syscall.MS_BIND, ""))
@@ -71,9 +72,8 @@ func child() {
 	// // PivotRoot调用完成后，容器内的'/'目录就会指向rootfs
 	// must(os.Chdir("/"))
 	syscall.Sethostname([]byte("container"))
-	// TODO: 这里需要超管权限，sudo还不好使（逆天）
 	// 切换根目录
-	must(syscall.Chroot("/workspaces/container-fs"))
+	must(syscall.Chroot(childFsPath))
 	must(syscall.Chdir("/"))
 	// 这一步实际执行容器中需要运行的命令
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)

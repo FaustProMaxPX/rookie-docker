@@ -72,9 +72,11 @@ func child() {
 	// // PivotRoot调用完成后，容器内的'/'目录就会指向rootfs
 	// must(os.Chdir("/"))
 	syscall.Sethostname([]byte("container"))
-	// 切换根目录
+	// 切换根目录，childFsPath类似容器中的镜像，当容器以某个镜像启动，实际上就是以某个文件系统启动
 	must(syscall.Chroot(childFsPath))
 	must(syscall.Chdir("/"))
+	// proc文件夹是操作系统与进程共享信息的一种渠道，如果没有进行mount操作，OS内核就不知道自己还要跟这个进程共享信息
+	must(syscall.Mount("proc", "proc", "proc", 0, ""))
 	// 这一步实际执行容器中需要运行的命令
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 	cmd.Stdin = os.Stdin
@@ -84,6 +86,7 @@ func child() {
 		fmt.Println("ERROR", err)
 		os.Exit(1)
 	}
+	syscall.Unmount("proc", 0)
 }
 
 func must(err error) {
